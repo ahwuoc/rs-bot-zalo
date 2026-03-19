@@ -1,20 +1,24 @@
 # rs-bot-zalo
 
-A simple and powerful Rust library for building Zalo Bots using the [Zalo Bot API](https://developers.zalo.me/docs/api/official-account-api/tin-nhan/gui-tin-nhan-van-ban-post-4318).
+[![Crates.io](https://img.shields.io/crates/v/rs-bot-zalo.svg)](https://crates.io/crates/rs-bot-zalo)
+[![Documentation](https://docs.rs/rs-bot-zalo/badge.svg)](https://docs.rs/rs-bot-zalo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This library uses the **Arc Pattern** to share the bot instance efficiently across asynchronous handlers, making it lightweight and high-performance.
+A simple, powerful, and lightweight Rust library for building Zalo Bots using the [Zalo Bot API](https://developers.zalo.me/docs/api/official-account-api/tin-nhan/gui-tin-nhan-van-ban-post-4318).
 
-## 🚀 Tính năng nổi bật (Features)
+This library leverages the **Arc Pattern** to efficiently share the bot instance across asynchronous handlers, ensuring high performance and minimal memory overhead.
 
-- **Asynchronous Design**: Được xây dựng trên `tokio` và `reqwest`.
-- **Arc sharing**: Share bot cho handler cực kỳ rẻ, không lo về bộ nhớ.
-- **Built-in Loop**: Tự động polling tin nhắn và quản lý vòng lặp bot.
-- **Error Handling**: Xử lý lỗi từ Zalo API bài bản (với Enum `ErrZalo`).
-- **Easy to use**: Đã đóng gói sẵn các method gửi tin nhắn, gửi ảnh, gửi sticker.
+## 🚀 Features
 
-## 📦 Cài đặt (Installation)
+- **Asynchronous Architecture**: Built on top of `tokio` and `reqwest` for maximum efficiency.
+- **Efficient Arc Sharing**: Pass the bot instance to handlers with near-zero cost.
+- **Built-in Polling Loop**: Handles message polling and lifecycle management automatically.
+- **Structured Error Handling**: Includes the `ErrZalo` enum for detailed API error management (401 Unauthorized, 429 Quota Exceeded, etc.).
+- **Easy Integration**: Pre-wrapped methods for sending text, photos, and stickers.
 
-Thêm vào `Cargo.toml` của bạn:
+## 📦 Installation
+
+Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -22,23 +26,27 @@ rs-bot-zalo = "0.1.0"
 tokio = { version = "1.0", features = ["full"] }
 ```
 
-## 🛠 Cách sử dụng (Usage)
+## 🛠 Usage
 
-Dưới đây là ví dụ về một **Echo Bot** đơn giản:
+Here is a simple **Echo Bot** implementation:
 
 ```rust
 use rs_bot_zalo::bot::bot::ZaloBot;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Initialize the bot with your Token
     let token = "YOUR_ZALO_BOT_TOKEN";
     let bot = ZaloBot::new(token);
 
-    // Chạy bot và đăng ký handler
-    bot.run(|ctx, bot| async move {
-        println!("Tin nhắn: {} từ {}", ctx.text, ctx.from.display_name);
+    println!("Bot is running...");
 
-        // Phản hồi lại tin nhắn
+    // 2. Start the bot with a handler
+    // The handler receives (Context, ZaloBot)
+    bot.run(|ctx, bot| async move {
+        println!("Received: '{}' from {}", ctx.text, ctx.from.display_name);
+
+        // Echo the received message back to the sender
         bot.send_message(&ctx.from.id, &format!("Echo: {}", ctx.text)).await?;
 
         Ok(())
@@ -49,27 +57,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## 📚 Các Method được hỗ trợ
+## 📚 Supported Methods
 
-- `send_message(chat_id, text)`: Gửi tin nhắn văn bản.
-- `send_photo(chat_id, url, caption)`: Gửi ảnh kèm chú thích.
-- `send_sticker(chat_id, sticker_id)`: Gửi sticker.
+- `send_message(chat_id, text)`: Send text messages.
+- `send_photo(chat_id, url, caption)`: Send photos with captions.
+- `send_sticker(chat_id, sticker_id)`: Send stickers.
 
-## ⚠️ Xử lý lỗi
+## ⚠️ Error Handling
 
-Thư viện tự động trả về lỗi `ErrZalo` nếu API thất bại (ví dụ: Token hết hạn).
+The library automatically returns an `ErrZalo` if the API request fails (e.g., token expired or invalid).
 
 ```rust
-match bot.run(handler).await {
-    Err(e) => {
-        if let Some(zalo_err) = e.downcast_ref::<rs_bot_zalo::bot::ErrZalo>() {
-             println!("Lỗi Zalo: {}", zalo_err);
-        }
-    },
-    _ => ()
+if let Err(e) = bot.run(handler).await {
+    if let Some(zalo_err) = e.downcast_ref::<rs_bot_zalo::bot::ErrZalo>() {
+         eprintln!("Zalo API Error: {}", zalo_err);
+    }
 }
 ```
 
 ## 📄 License
 
-Thư viện này được phát hành dưới bản quyền [MIT](LICENSE).
+This library is licensed under the [MIT License](LICENSE).
