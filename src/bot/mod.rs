@@ -1,6 +1,10 @@
 pub mod bot;
 pub mod error;
-pub use error::ErrZalo;
+
+pub use bot::{ZaloBot, ZaloResult};
+
+pub use error::{ErrZalo, ZaloError};
+
 pub const BASE_URL: &str = "https://bot-api.zaloplatforms.com/bot";
 
 use serde::Deserialize;
@@ -30,7 +34,7 @@ impl Method {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Context {
     pub text: String,
     pub message_id: String,
@@ -38,7 +42,7 @@ pub struct Context {
     pub from: FromTarget,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct FromTarget {
     pub id: String,
     pub display_name: String,
@@ -67,7 +71,7 @@ pub struct MessageInner {
     pub date: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Chat {
     pub id: String,
     pub chat_type: String,

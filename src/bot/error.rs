@@ -1,6 +1,14 @@
 use std::fmt;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
+pub enum ZaloError {
+    Api(ErrZalo),
+    Http(reqwest::Error),
+    Json(serde_json::Error),
+    Other(Box<dyn std::error::Error + Send + Sync>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrZalo {
     BadRequest = 400,
     Unauthorized = 401,
@@ -26,21 +34,63 @@ impl ErrZalo {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            ErrZalo::BadRequest => "Bad request - sai đường dẫn hoặc API Name không hợp lệ",
-            ErrZalo::Unauthorized => "Unauthorized - Token đã hết hạn hoặc không hợp lệ",
-            ErrZalo::InternalServerError => "Internal server error",
-            ErrZalo::NotFound => "Not found - Yêu cầu truy cập không lệ",
-            ErrZalo::RequestTimeout => "Request timeout - Quá thời gian xử lý cho phép",
-            ErrZalo::QuotaExceeded => "Quota exceeded - Vượt quá giới hạn sử dụng API cho phép",
-            ErrZalo::Unknown => "Unknown error",
+            ErrZalo::BadRequest => "Bad Request",
+            ErrZalo::Unauthorized => "Unauthorized",
+            ErrZalo::InternalServerError => "Internal Server Error",
+            ErrZalo::NotFound => "Not Found",
+            ErrZalo::RequestTimeout => "Request Timeout",
+            ErrZalo::QuotaExceeded => "Quota Exceeded",
+            ErrZalo::Unknown => "Unknown Error",
         }
     }
 }
 
 impl fmt::Display for ErrZalo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Code {}: {}", *self as i32, self.as_str())
+        write!(
+            f,
+            "Zalo API Error (Code {}): {}",
+            *self as i32,
+            self.as_str()
+        )
     }
 }
 
-impl std::error::Error for ErrZalo {}
+impl fmt::Display for ZaloError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ZaloError::Api(e) => write!(f, "{}", e),
+            ZaloError::Http(e) => write!(f, "HTTP Error: {}", e),
+            ZaloError::Json(e) => write!(f, "JSON Error: {}", e),
+            ZaloError::Other(e) => write!(f, "Error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for ZaloError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ZaloError::Http(e) => Some(e),
+            ZaloError::Json(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<reqwest::Error> for ZaloError {
+    fn from(err: reqwest::Error) -> Self {
+        ZaloError::Http(err)
+    }
+}
+
+impl From<serde_json::Error> for ZaloError {
+    fn from(err: serde_json::Error) -> Self {
+        ZaloError::Json(err)
+    }
+}
+
+impl From<ErrZalo> for ZaloError {
+    fn from(err: ErrZalo) -> Self {
+        ZaloError::Api(err)
+    }
+}

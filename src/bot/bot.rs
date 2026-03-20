@@ -1,10 +1,11 @@
-use std::sync::Arc;
-
 use reqwest::Client;
 use serde_json::json;
+use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 
-use crate::bot::{Context, MessageResponse, Method};
+use crate::bot::{Context, ErrZalo, MessageResponse, Method, ZaloError};
+
+pub type ZaloResult<T> = Result<T, ZaloError>;
 
 #[derive(Debug)]
 struct BotInner {
@@ -26,23 +27,23 @@ impl ZaloBot {
             }),
         }
     }
+
     async fn post_request<S: serde::Serialize>(
         &self,
         method: Method,
         body: S,
-    ) -> Result<MessageResponse, Box<dyn std::error::Error>> {
+    ) -> ZaloResult<MessageResponse> {
         let url = method.build_url(&self.inner.token);
         let res = self.inner.client.post(url).json(&body).send().await?;
 
         let data: MessageResponse = res.json().await?;
         if !data.ok {
             let code = data.error_code.unwrap_or(0);
-            return Err(Box::new(crate::bot::ErrZalo::from_code(code)));
+            return Err(ZaloError::Api(ErrZalo::from_code(code)));
         }
         Ok(data)
     }
-
-    async fn poll_once(&self) -> Result<Option<Context>, Box<dyn std::error::Error>> {
+    async fn poll_once(&self) -> ZaloResult<Option<Context>> {
         let data = self
             .post_request(Method::Update, json!({ "timeout": 30 }))
             .await?;
@@ -59,39 +60,35 @@ impl ZaloBot {
         Ok(None)
     }
 
-    pub async fn run<F, Fut>(&self, handler: F) -> Result<(), Box<dyn std::error::Error>>
+    pub async fn run<F, Fut>(&self, handler: F) -> ZaloResult<()>
     where
         F: Fn(Context, ZaloBot) -> Fut + Send + Sync,
-        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error>>> + Send,
+        Fut: std::future::Future<Output = ZaloResult<()>> + Send,
     {
-        println!("Bot started...");
+        tracing::info!("Starting Zalo bot loop...");
         loop {
             match self.poll_once().await {
                 Ok(Some(ctx)) => {
                     if let Err(e) = handler(ctx, self.clone()).await {
-                        eprintln!("[Handler Error]: {}", e);
+                        tracing::error!("Handler error: {}", e);
                     }
                 }
                 Ok(None) => {}
+                Err(ZaloError::Api(ErrZalo::Unauthorized)) => {
+                    tracing::error!("Unauthorized (401): Stopping bot. Please check your token.");
+                    return Err(ZaloError::Api(ErrZalo::Unauthorized));
+                }
                 Err(e) => {
-                    eprintln!("[Poll Error]: {}", e);
-                    if let Some(zalo_err) = e.downcast_ref::<crate::bot::ErrZalo>() {
-                        if matches!(zalo_err, crate::bot::ErrZalo::Unauthorized) {
-                            println!("Unauthorized (401): Stopping bot. Please check your token.");
-                            return Err(e);
-                        }
-                    }
+                    tracing::warn!("Polling error: {}. Retrying in 5 seconds...", e);
+                    sleep(Duration::from_secs(5)).await;
+                    continue;
                 }
             }
-            sleep(Duration::from_secs(1)).await;
+            sleep(Duration::from_millis(500)).await;
         }
     }
 
-    pub async fn send_message(
-        &self,
-        chat_id: &str,
-        text: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send_message(&self, chat_id: &str, text: &str) -> ZaloResult<()> {
         self.post_request(
             Method::Send,
             json!({
@@ -103,12 +100,7 @@ impl ZaloBot {
         Ok(())
     }
 
-    pub async fn send_photo(
-        &self,
-        chat_id: &str,
-        photo: &str,
-        caption: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send_photo(&self, chat_id: &str, photo: &str, caption: &str) -> ZaloResult<()> {
         self.post_request(
             Method::SendPhoto,
             json!({
@@ -120,12 +112,7 @@ impl ZaloBot {
         .await?;
         Ok(())
     }
-
-    pub async fn send_sticker(
-        &self,
-        chat_id: &str,
-        sticker_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send_sticker(&self, chat_id: &str, sticker_id: &str) -> ZaloResult<()> {
         self.post_request(
             Method::SendSticker,
             json!({
